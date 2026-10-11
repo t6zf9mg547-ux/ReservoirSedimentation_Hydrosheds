@@ -1,0 +1,63 @@
+# ---------------------------------------------------------------------------
+# .gitignore template for uv-based Python projects (geopandas/GIS scripts)
+# ---------------------------------------------------------------------------
+
+# Virtual environment
+.venv/
+
+# uv
+# (keep uv.lock tracked in git so installs are reproducible across machines -
+#  do NOT ignore it unless you have a specific reason to)
+
+# Python cache / bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+build/
+dist/
+*.egg-info/
+
+# Environment / secrets
+.env
+.env.*
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# Generated output -- regenerated locally, not tracked in git
+/Output/
+/Plot/
+
+# Data/: keep only the generic Template case; ignore every other case folder
+/Data/*
+!/Data/Template/
+
+# Generated PDFs -- regenerable, not tracked
+*.pdf
+
+# Logs
+*.log
+
+# mnema memory store: track log.jsonl + config.json (source of truth),
+# ignore the derived vector/state caches (rebuild automatically from the
+# log on the next mnema command)
+Resources/.mnema/vec_*.f16
+Resources/.mnema/state.npz
+Resources/.mnema/views.npz
+
+# Local machine / personal tooling -- not for the public repo
+/CLAUDE.md
+/register-project.sh
+/mount-library.sh
+/Resources/.mnema/
