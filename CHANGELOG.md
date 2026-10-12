@@ -13,6 +13,8 @@ conventions and [Semantic Versioning](https://semver.org/).
   diagrams (`Module/HydroshedsDelineation.py`, `SedimentationCalcs.py`,
   `ScreeningPlots.py`; diagram data in `Resources/`).
 - Dependencies: `matplotlib`, `pyogrio`.
+- `DoR_Cat = 4` when at least one upstream dam has no storage information (magenta in the diagrams,
+  legend "Upstream storage unknown").
 - Sediment bulk density is a run parameter (default 1200 kg/m3; prompt or `--density`).
 - Screening diagrams: Arial font, red dashed 300-year line, left-aligned technique box, and
   enlarged labels.

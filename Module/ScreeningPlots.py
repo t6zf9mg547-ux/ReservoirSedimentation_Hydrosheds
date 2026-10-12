@@ -7,7 +7,7 @@ methodological note), one per scenario (lower-loss / higher-loss).
   - x = C/I, y = C/S (log-log), S-curve and technique regions 1-3 from
     Resources/S_curve.csv and Resources/Technique_areas.csv
   - dot size = reservoir capacity class (5 classes, small to large)
-  - dot colour = DoR_Cat (green 1, orange 2, red 3)
+  - dot colour = DoR_Cat (green 1, orange 2, red 3, magenta 4 = an upstream dam has no storage data)
   - only dams with QC_flag_Area in (ok, N/A) and QC_flag_Capacity = ok
 
 Imported by RunScreening.py. Can also be run alone on an existing output CSV:
@@ -30,8 +30,9 @@ PLOT_DIR = PROJECT_ROOT / "Plot"
 
 CAPACITY_CLASSES = ["<3 hm3", "3-10 hm3", "10-50 hm3", "50-100 hm3", ">100 hm3"]
 MARKER_AREAS = [8, 25, 55, 100, 170]                 # points^2, small to large
-DOR_COLORS = {1: "tab:green", 2: "orange", 3: "tab:red"}
-DOR_LABELS = {1: "DoR < 0.2", 2: "0.2 ≤ DoR ≤ 0.5", 3: "DoR > 0.5"}
+DOR_COLORS = {1: "tab:green", 2: "orange", 3: "tab:red", 4: "magenta"}
+DOR_LABELS = {1: "DoR < 0.2", 2: "0.2 ≤ DoR ≤ 0.5", 3: "DoR > 0.5",
+              4: "Upstream storage unknown"}
 SCENARIOS = {"Low": "Lower-loss scenario", "High": "Higher-loss scenario"}
 
 CS_THRESHOLD_YEARS = 300                              # screening threshold, Annandale (2013)

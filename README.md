@@ -64,8 +64,9 @@ are constants at the top of `Module/HydroshedsDelineation.py`.
   upstream). If either area is missing, or they differ by < 5 %, the order is
   unknown and neither is counted as upstream of the other (listed in the
   diagnostics file).
-- Upstream dams with no `Reservoir_hm3` add nothing to `Storage_Upstream_hm3`.
-  A dam with no upstream dams has `Degree_Regulation = 0` and `DoR_Cat = 1`.
+- Upstream dams with no `Reservoir_hm3` add nothing to `Storage_Upstream_hm3`, so the degree of
+  regulation is only a lower bound: such a dam gets `DoR_Cat = 4` (magenta, "Upstream storage unknown")
+  instead of 1–3. A dam with no upstream dams has `Degree_Regulation = 0` and `DoR_Cat = 1`.
 - The upper Gill/Brune trapping-efficiency fit exceeds 1 for large C/I; it is capped at 1.
 - QC flags use the text values `ok`, `no_ok` and `N/A`. `QC_flag_Low/High` is 0 when C/S ≥ 300 years, else 1.
 - `River_Networks` keeps the reaches whose representative point lies inside the watershed.

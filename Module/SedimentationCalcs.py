@@ -103,6 +103,10 @@ def compute_screening(df, density_kg_m3=DEFAULT_DENSITY_KG_M3, year=None):
                            labels=[1, 2, 3], right=False).astype("Int64")
     # right=False puts exactly 0.5 in cat 3; the note says "between 0.2 and 0.5" is 2
     df.loc[df["Degree_Regulation"] == 0.5, "DoR_Cat"] = 2
+    # Category 4: at least one upstream dam has no storage information, so the storage above
+    # (and the degree of regulation) is only a lower bound and cannot be classified.
+    unknown_storage = [any(not (cap_of.get(d, np.nan) > 0) for d in s.split(", ") if d) for s in ups]
+    df.loc[unknown_storage, "DoR_Cat"] = 4
 
     # ero_kh_uav [kg/ha/yr] x 100 [ha/km2] x UP_AREA [km2] / density [kg/m3] -> m3/yr -> hm3/yr
     df["Erosion_hm3"] = df["ero_kh_uav"] * 100 * area / density_kg_m3 / 1e6
