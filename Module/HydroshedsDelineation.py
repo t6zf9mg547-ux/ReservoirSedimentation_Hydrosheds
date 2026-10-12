@@ -42,10 +42,11 @@ SAME_BASIN_AREA_TOL = 0.05    # two dams in one sub-basin: areas closer than thi
 MAX_CHAIN_STEPS = 200_000     # safety cap against cyclic NEXT_DOWN data
 METRIC_CRS = "EPSG:4087"      # World Equidistant Cylindrical, for snap distances only
 
-LAYERS = ["Dams", "Watershed", "Sub_basins", "River_Networks", "River_Downstream"]
+LAYERS = ["Dams", "Watershed", "Sub_basins", "River_Networks", "River_Downstream", "Landslide_hazard"]
 # Merged-layer key that identifies a unique feature ("avoid duplication")
 MERGE_KEYS = {"Dams": "Dam_ID", "Watershed": "Dam_ID", "Sub_basins": "HYBAS_ID",
-              "River_Networks": "HYRIV_ID", "River_Downstream": "HYRIV_ID"}
+              "River_Networks": "HYRIV_ID", "River_Downstream": "HYRIV_ID",
+              "Landslide_hazard": ["Dam_ID", "Hazard_Level"]}   # hazard polygons are specific to each watershed
 
 
 # ── Sub-basin graph ───────────────────────────────────────────────────────────
@@ -251,6 +252,6 @@ def merge_gpkgs(folder, out_name="All_Dams.gpkg"):
         merged = gpd.GeoDataFrame(pd.concat(parts, ignore_index=True), crs=parts[0].crs)
         merged = merged.drop_duplicates(subset=MERGE_KEYS[layer])
         # Role / Dam_ID / FLOW_ORDER describe one dam's view and mean nothing on a shared feature
-        drop = {"Dams": ["Role"], "Watershed": []}.get(layer, ["Dam_ID", "FLOW_ORDER"])
+        drop = {"Dams": ["Role"], "Watershed": [], "Landslide_hazard": []}.get(layer, ["Dam_ID", "FLOW_ORDER"])
         _write_layer(merged.drop(columns=drop, errors="ignore"), out, layer)
     return out

@@ -17,14 +17,17 @@ Creates `.venv` and installs everything listed in `pyproject.toml`.
 uv run python Module/RunScreening.py
 ```
 Opens a file dialog (starting in `Data/`) to pick the portfolio CSV, asks for the
-deposited-sediment bulk density (Enter = 1200 kg/m3), then
-delineates every dam, writes `Output/<portfolio>_Hydrosheds.csv`, the
-GeoPackages in `Output/<portfolio>_Watershed/` and the two diagrams in `Plot/`.
+sediment scenario (SDR: low / high / user-defined `a × A^b`; TE: low / medium / high) and the
+deposited-sediment bulk density (Enter = low / low / 1200 kg/m3), then delineates every dam and writes
+`Output/<portfolio>_Hydrosheds_Scen<#>_SDR_<..>_TE_<..>.csv`, the GeoPackages in
+`Output/<portfolio>_Watershed/` and the diagram in `Plot/`. `<#>` is the next free scenario number.
 
 Without the dialog (the argument is a full path or a filename in `Data/`):
 ```bash
-uv run python Module/RunScreening.py Template.csv --density 1200
+uv run python Module/RunScreening.py Template.csv --sdr low --te medium --density 1200
+uv run python Module/RunScreening.py Template.csv --sdr user --a 0.5 --b -0.1 --te high
 ```
+`--scen-number N` sets the scenario number. The watersheds do not depend on the scenario and are reused.
 Existing `<Dam_ID>.gpkg` files are reused; delete the `<portfolio>_Watershed`
 folder to rebuild everything.
 

@@ -7,19 +7,26 @@ note, "reservoir sedimentation methodological note_HydroSheds").
 Input   Data/<portfolio>.csv   (picked in a file dialog) with columns
         Dam_ID, Dam_Name, Latitude, Longitude, Construction_Year,
         Reservoir_hm3, Catchment_km2
-Output  Output/<portfolio>_Hydrosheds.csv              input + calculated (incl. QC_flag_River) + 296 HydroATLAS columns
-        Output/<portfolio>_Hydrosheds_diagnostics.csv  per-dam delineation / snapping log
-        Output/<portfolio>_Watershed/<Dam_ID>.gpkg     Dams, Watershed, Sub_basins,
-                                                       River_Networks, River_Downstream
-        Output/<portfolio>_Watershed/All_Dams.gpkg     the same 5 layers merged, no duplicates
-        Plot/<portfolio>_Low.png, _High.png            screening diagrams, one per scenario
+Output  Output/<portfolio>_Hydrosheds_Scen<#>_SDR_<..>_TE_<..>.csv   input + calculated + 296 HydroATLAS columns
+        Output/<same name>_diagnostics.csv             per-dam delineation log + the scenario parameters
+        Plot/<same name>.png                           screening diagram of the scenario
+        Output/<portfolio>_Watershed/<Dam_ID>.gpkg     Dams, Watershed, Sub_basins, River_Networks,
+                                                       River_Downstream, Landslide_hazard
+        Output/<portfolio>_Watershed/All_Dams.gpkg     the same 6 layers merged, no duplicates
+        <#> is the next free scenario number of the portfolio. The watersheds do not depend on the
+        scenario and are reused.
+
+Scenario: one sediment delivery ratio (SDR: low Diodato, high Gourfi, or user-defined a x A^b)
+and one trapping efficiency (TE: low, medium, high), asked for in the terminal or given as
+--sdr/--a/--b/--te (see Scenario.py).
 
 Resume: a <Dam_ID>.gpkg that already exists is not rebuilt. Delete the
 <portfolio>_Watershed folder to force a full rebuild.
 
-Run:  uv run python Module/RunScreening.py [portfolio.csv] [--density KG_M3]
-      no csv argument opens the file dialog; with no --density you are asked for the
-      deposited-sediment bulk density (Enter = 1200 kg/m3)
+Run:  uv run python Module/RunScreening.py [portfolio.csv] [--sdr low|high|user [--a A --b B]]
+                                            [--te low|medium|high] [--scen-number N] [--density KG_M3]
+      no csv argument opens the file dialog; without --sdr/--te/--density you are asked
+      (Enter = low / low / 1200 kg/m3)
 """
 
 import argparse
@@ -32,7 +39,9 @@ import pandas as pd
 import pyogrio
 
 import HydroshedsDelineation as hd
+import LandslideHazard
 import ScreeningPlots
+import Scenario
 import SedimentationCalcs as calcs
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -46,6 +55,7 @@ INPUT_COLS = ["Dam_ID", "Dam_Name", "Latitude", "Longitude",
 def parse_args():
     ap = argparse.ArgumentParser(description="Reservoir sedimentation risk screening.")
     ap.add_argument("portfolio", nargs="?", help="CSV path or filename in Data/ (default: file dialog)")
+    Scenario.add_arguments(ap)
     ap.add_argument("--density", type=float,
                     help=f"bulk density of deposited sediment, kg/m3 (default {calcs.DEFAULT_DENSITY_KG_M3:g})")
     return ap.parse_args()
@@ -85,8 +95,13 @@ def main():
     csv_path = pick_csv(args.portfolio)
     density = args.density if args.density else (
         ask_density() if sys.stdin.isatty() else calcs.DEFAULT_DENSITY_KG_M3)
-    print(f"Sediment bulk density: {density:g} kg/m3")
+    scen = Scenario.from_args(args)
     stem = csv_path.stem
+    base = f"{stem}_Hydrosheds"
+    number = args.scen_number or Scenario.next_number(OUTPUT_DIR, base)
+    run_name = f"{base}_Scen{number}_{scen.label}"
+    print(f"Sediment bulk density: {density:g} kg/m3")
+    print(f"Scenario {number}: {scen.description}")
     watershed_dir = OUTPUT_DIR / f"{stem}_Watershed"
     watershed_dir.mkdir(parents=True, exist_ok=True)
     print(f"Portfolio: {csv_path}")
@@ -141,6 +156,10 @@ def main():
             diagnostics[dam_id] = diag
             print(f"  [{i}/{len(todo)}] {dam_id} ({dam['Dam_Name']}): {diag['n_sub_basins']} sub-basins, "
                   f"{diag['n_upstream_dams']} upstream dams, downstream {diag['downstream_status']}")
+    print("Landslide hazard layer (watersheds that do not have it yet) …")
+    n_hazard = LandslideHazard.ensure_layers(watershed_dir, matched["Dam_ID"])
+    print(f"  → {n_hazard} added")
+    hazard = LandslideHazard.shares(watershed_dir, matched["Dam_ID"])
     merged = hd.merge_gpkgs(watershed_dir)
     print(f"  → merged: {merged}\n")
 
@@ -151,22 +170,26 @@ def main():
     table = pd.concat([dams.drop(columns="HYBAS_ID"), attrs], axis=1)
     table["QC_flag_River"] = ["no_ok" if d in no_river or pd.isna(h) else "ok"
                               for d, h in zip(dams["Dam_ID"], dams["HYBAS_ID"])]
-    table = calcs.compute_screening(table, density)
+    for col in hazard.columns:                       # share of the watershed per landslide hazard class
+        table[col] = table["Dam_ID"].map(hazard[col])
+    table = calcs.compute_screening(table, density, scen.a, scen.b, scen.te)
     table = table[INPUT_COLS + calcs.CALC_COLUMNS + list(attr_cols)]
-    out_csv = OUTPUT_DIR / f"{stem}_Hydrosheds.csv"
+    out_csv = OUTPUT_DIR / f"{run_name}.csv"
     table.to_csv(out_csv, index=False, encoding="utf-8-sig")
     print(f"✓ {out_csv}  ({table.shape[0]} rows × {table.shape[1]} columns)")
 
     diag_rows = [{"Dam_ID": d, "HYBAS_ID": h,
                   "river_downstream": "NOT FOUND" if d in no_river else "found",
                   "same_subbasin_order_unknown": ", ".join(upstream[d][1]),
-                  **{k: v for k, v in diagnostics.get(d, {}).items() if k not in ("Dam_ID", "HYBAS_ID")}}
+                  **{k: v for k, v in diagnostics.get(d, {}).items() if k not in ("Dam_ID", "HYBAS_ID")},
+                  "scenario": number, "sdr_option": scen.sdr, "sdr_a": scen.a, "sdr_b": scen.b,
+                  "te_option": scen.te, "density_kg_m3": density}
                  for d, h in zip(dams["Dam_ID"], dams["HYBAS_ID"])]
-    pd.DataFrame(diag_rows).to_csv(OUTPUT_DIR / f"{stem}_Hydrosheds_diagnostics.csv", index=False)
+    pd.DataFrame(diag_rows).to_csv(OUTPUT_DIR / f"{run_name}_diagnostics.csv", index=False)
 
     # 5. Plots
     print("Plots:")
-    ScreeningPlots.plot_all(table, stem, density)
+    ScreeningPlots.plot_run(table, run_name, scen.description, density)
 
     n_plot = len(ScreeningPlots.plottable(table))
     print(f"\n{n_plot} of {len(table)} dams passed the QC filters for plotting.")

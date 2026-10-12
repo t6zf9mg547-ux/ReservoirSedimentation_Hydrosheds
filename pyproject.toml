@@ -7,7 +7,7 @@
 
 [project]
 name = "reservoir-sedimentation-hydrosheds"
-version = "0.1.0"
+version = "0.2.0"
 description = "Reservoir sedimentation risk screening for dam portfolios using HydroSHEDS (HydroBASINS/HydroATLAS/HydroRIVERS)"
 requires-python = ">=3.13"
 dependencies = [
@@ -19,6 +19,7 @@ dependencies = [
     "pyproj>=3.6",
     "matplotlib>=3.11.2",
     "pyogrio>=0.13.0",
+    "rasterio>=1.5.2",
 ]
 
 # Notes:

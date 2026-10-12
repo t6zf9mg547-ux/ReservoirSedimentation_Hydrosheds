@@ -2,7 +2,7 @@
 ScreeningPlots.py
 =================
 Step iii: reservoir sedimentation screening diagram (Figure 1 of the
-methodological note), one per scenario (lower-loss / higher-loss).
+methodological note) for the chosen sediment scenario (SDR and TE, see Scenario.py).
 
   - x = C/I, y = C/S (log-log), S-curve and technique regions 1-3 from
     Resources/S_curve.csv and Resources/Technique_areas.csv
@@ -33,7 +33,6 @@ MARKER_AREAS = [8, 25, 55, 100, 170]                 # points^2, small to large
 DOR_COLORS = {1: "tab:green", 2: "orange", 3: "tab:red", 4: "magenta"}
 DOR_LABELS = {1: "DoR < 0.2", 2: "0.2 ≤ DoR ≤ 0.5", 3: "DoR > 0.5",
               4: "Upstream storage unknown"}
-SCENARIOS = {"Low": "Lower-loss scenario", "High": "Higher-loss scenario"}
 
 CS_THRESHOLD_YEARS = 300                              # screening threshold, Annandale (2013)
 XLIM, YLIM = (1e-4, 10), (0.1, 1e4)
@@ -45,12 +44,11 @@ def plottable(df):
     return df[df["QC_flag_Area"].isin(["ok", "N/A"]) & (df["QC_flag_Capacity"] == "ok")]
 
 
-def plot_scenario(df, scenario, out_path, density=None):
+def plot_scenario(df, out_path, scenario_text="", density=None, extra_note=""):
     """Draw one diagram and return the number of plotted dams outside the axes."""
     d = plottable(df)
-    x, y = d["C/I"], d[f"{scenario}_C/S"]
-    d = d[x.notna() & y.notna()]
-    x, y = d["C/I"], d[f"{scenario}_C/S"]
+    d = d[d["C/I"].notna() & d["C/S"].notna()]
+    x, y = d["C/I"], d["C/S"]
     outside = int(((x < XLIM[0]) | (x > XLIM[1]) | (y < YLIM[0]) | (y > YLIM[1])).sum())
 
     fig, ax = plt.subplots(figsize=(11, 7.5))
@@ -85,7 +83,7 @@ def plot_scenario(df, scenario, out_path, density=None):
     for cls, area in zip(CAPACITY_CLASSES, MARKER_AREAS):
         for cat, color in DOR_COLORS.items():
             s = d[(d["Reservoir_Cat"] == cls) & (d["DoR_Cat"] == cat)]
-            ax.scatter(s["C/I"], s[f"{scenario}_C/S"], s=area, c=color, alpha=0.75,
+            ax.scatter(s["C/I"], s["C/S"], s=area, c=color, alpha=0.75,
                        edgecolor="k", linewidth=0.3, zorder=3)
 
     size_handles = [Line2D([], [], marker="o", ls="", mfc="0.6", mec="k", mew=0.3,
@@ -100,13 +98,15 @@ def plot_scenario(df, scenario, out_path, density=None):
 
     ax.set_xlabel("Reservoir Capacity / Mean Annual Runoff  (C/I)")
     ax.set_ylabel("Reservoir Capacity / Mean Annual Storage Loss  (C/S)")
-    ax.set_title(f"Applicability of sediment management techniques – {SCENARIOS[scenario]}",
-                 fontweight="bold", color="0.35")
+    ax.set_title("Applicability of sediment management techniques", fontweight="bold", color="0.35", pad=24)
+    ax.text(0.5, 1.012, scenario_text, transform=ax.transAxes, ha="center", va="bottom", fontsize=9, color="0.35")
     note = f"{len(d)} dams plotted of {len(df)} in the portfolio"
     if outside:
         note += f"; {outside} outside the axes"
     if density is not None:
         note += f"; sediment bulk density {density:g} kg/m3"
+    if extra_note:
+        note += f"; {extra_note}"
     fig.text(0.01, 0.005, note, fontsize=7, color="0.4")
 
     fig.tight_layout()
@@ -116,12 +116,11 @@ def plot_scenario(df, scenario, out_path, density=None):
     return outside
 
 
-def plot_all(df, stem, density=None):
-    """Write Plot/<stem>_<Low|High>.png for both scenarios."""
-    for scenario in SCENARIOS:
-        path = PLOT_DIR / f"{stem}_{scenario}.png"
-        outside = plot_scenario(df, scenario, path, density)
-        print(f"  → {path.name}" + (f" ({outside} dams outside the axes)" if outside else ""))
+def plot_run(df, name, scenario_text="", density=None, extra_note=""):
+    """Write Plot/<name>.png, the diagram of the run's sediment scenario."""
+    path = PLOT_DIR / f"{name}.png"
+    outside = plot_scenario(df, path, scenario_text, density, extra_note)
+    print(f"  → {path.name}" + (f" ({outside} dams outside the axes)" if outside else ""))
 
 
 if __name__ == "__main__":
@@ -135,4 +134,4 @@ if __name__ == "__main__":
     if not chosen:
         raise SystemExit("No file selected — exiting.")
     table = pd.read_csv(chosen, encoding="utf-8-sig", keep_default_na=False, na_values=[""])
-    plot_all(table, Path(chosen).stem.removesuffix("_Hydrosheds"))
+    plot_run(table, Path(chosen).stem, scenario_text=Path(chosen).stem)

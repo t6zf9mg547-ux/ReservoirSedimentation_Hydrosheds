@@ -24,34 +24,38 @@ CALC_COLUMNS = [
     "Pourpoint_Area_km2", "QC_flag_Area", "Inflow_hm3", "QC_flag_Capacity", "C/I",
     "Upstream_Dams", "Storage_Upstream_hm3", "Degree_Regulation", "DoR_Cat",
     "Nb_Sub_Basins", "Erosion_hm3",
-    "Low_SDR", "Low_TE", "Low_Sed_hm3", "Low_C/S", "QC_flag_Low",
-    "High_SDR", "High_TE", "High_Sed_hm3", "High_C/S", "QC_flag_High",
+    "SDR", "TE", "Sed_hm3", "C/S", "QC_flag_CS",     # the chosen sediment scenario (see Scenario.py)
     "Operation_Year", "Reservoir_Cat",
     "QC_flag_River",    # set by RunScreening from the per-dam GeoPackages
+    "Landslide_VeryLow_pct", "Landslide_Low_pct", "Landslide_Medium_pct", "Landslide_High_pct",   # LandslideHazard.shares
 ]
 
 
-# ── Relationships (equations 4-7 of the note) ─────────────────────────────────
+# ── Relationships ─────────────────────────────────────────────────────────────
 
-def sdr_lower(area_km2):
-    """Diato & Grauso (2009), Italian catchments."""
-    return 0.41 * area_km2 ** -0.085
-
-
-def sdr_upper(area_km2):
-    """Gourfi et al. (2018), Moroccan catchments."""
-    return 0.93 * area_km2 ** -0.084
+def sdr(area_km2, a, b):
+    """Sediment delivery ratio a x A^b, A in km2 (presets in Scenario.SDR_OPTIONS: Diodato &
+    Grauso 2009 with 0.41 and -0.085, Gourfi et al. 2018 with 0.93 and -0.084). Not capped."""
+    return a * area_km2 ** b
 
 
-def te_lower(x):
+def te_low(x):
     """Gill (1979) fit to the lower Brune curve (fine sediment); x = C/I."""
     return x**3 / (1.02655 * x**3 + 0.02621 * x**2 - 0.000133 * x + 0.000001)
 
 
-def te_upper(x):
+def te_medium(x):
+    """Brune median curve; x = C/I."""
+    return x / (0.012 + 1.02 * x)
+
+
+def te_high(x):
     """Gill (1979) fit to the upper Brune curve (coarse sediment); x = C/I.
     The published fit tends to 1.005 for large x, so it is capped at 1."""
     return np.minimum(x**2 / (0.994701 * x**2 + 0.006297 * x + 0.000003), 1.0)
+
+
+TE_FUNCTIONS = {"Low": te_low, "Medium": te_medium, "High": te_high}
 
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
@@ -70,11 +74,13 @@ def _reservoir_cat(capacity):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
-def compute_screening(df, density_kg_m3=DEFAULT_DENSITY_KG_M3, year=None):
+def compute_screening(df, density_kg_m3, sdr_a, sdr_b, te_option, year=None):
     """df needs: Dam_ID, Construction_Year, Reservoir_hm3, Catchment_km2,
     Upstream_Dams (", "-separated Dam_IDs or empty), Nb_Sub_Basins, and the
     HydroATLAS columns UP_AREA, dis_m3_pyr and ero_kh_uav. density_kg_m3 is the
-    bulk density of the deposited sediment, used to convert eroded mass to volume."""
+    bulk density of the deposited sediment, used to convert eroded mass to volume.
+    The sediment scenario is SDR = sdr_a x A^sdr_b and the trapping efficiency curve te_option
+    ("Low", "Medium" or "High")."""
     year = year or date.today().year
     df = df.copy()
     cap = pd.to_numeric(df["Reservoir_hm3"], errors="coerce")
@@ -111,12 +117,11 @@ def compute_screening(df, density_kg_m3=DEFAULT_DENSITY_KG_M3, year=None):
     # ero_kh_uav [kg/ha/yr] x 100 [ha/km2] x UP_AREA [km2] / density [kg/m3] -> m3/yr -> hm3/yr
     df["Erosion_hm3"] = df["ero_kh_uav"] * 100 * area / density_kg_m3 / 1e6
 
-    for tag, sdr, te in (("Low", sdr_lower, te_lower), ("High", sdr_upper, te_upper)):
-        df[f"{tag}_SDR"] = sdr(area)
-        df[f"{tag}_TE"] = te(x)
-        df[f"{tag}_Sed_hm3"] = df["Erosion_hm3"] * df[f"{tag}_SDR"] * df[f"{tag}_TE"]
-        df[f"{tag}_C/S"] = cap / df[f"{tag}_Sed_hm3"].where(df[f"{tag}_Sed_hm3"] > 0)
-        df[f"QC_flag_{tag}"] = _flag_cs(df[f"{tag}_C/S"])
+    df["SDR"] = sdr(area, sdr_a, sdr_b)
+    df["TE"] = TE_FUNCTIONS[te_option](x)
+    df["Sed_hm3"] = df["Erosion_hm3"] * df["SDR"] * df["TE"]
+    df["C/S"] = cap / df["Sed_hm3"].where(df["Sed_hm3"] > 0)
+    df["QC_flag_CS"] = _flag_cs(df["C/S"])
 
     df["Operation_Year"] = (year - cons_year).astype("Int64").astype("object").where(
         cons_year.notna(), "N/A")
