@@ -17,12 +17,14 @@ import pandas as pd
 
 DEFAULT_DENSITY_KG_M3 = 1200.0  # deposited-sediment bulk density (default)
 CS_THRESHOLD_YEARS = 300.0      # Annandale (2013) screening threshold
+DOR_FLAG_RELATIVE = 0.20         # QC_flag_DOR: relative difference between the two degrees of regulation ...
+DOR_FLAG_ABSOLUTE = 0.05         # ... and absolute difference above which they are inconsistent
 AREA_TOLERANCE = 0.20           # QC_flag_Area: |pourpoint - catchment| / catchment
 M3S_TO_HM3_YR = 31.536          # m3/s -> hm3/year
 
 CALC_COLUMNS = [
     "Pourpoint_Area_km2", "QC_flag_Area", "Inflow_hm3", "QC_flag_Capacity", "C/I",
-    "Upstream_Dams", "Storage_Upstream_hm3", "Degree_Regulation", "DoR_Cat",
+    "Upstream_Dams", "Storage_Upstream_hm3", "Degree_Regulation", "Degree_Regulation_HA", "DoR_Cat", "QC_flag_DOR",
     "Nb_Sub_Basins", "Erosion_hm3",
     "SDR", "TE", "Sed_hm3", "C/S", "QC_flag_CS",     # the chosen sediment scenario (see Scenario.py)
     "Operation_Year", "Reservoir_Cat",
@@ -105,14 +107,28 @@ def compute_screening(df, density_kg_m3, sdr_a, sdr_b, te_option, year=None):
     df["Storage_Upstream_hm3"] = [
         sum(np.nan_to_num(cap_of.get(d, 0.0)) for d in s.split(", ") if d) for s in ups]
     df["Degree_Regulation"] = df["Storage_Upstream_hm3"] / inflow
-    df["DoR_Cat"] = pd.cut(df["Degree_Regulation"], bins=[-np.inf, 0.2, 0.5, np.inf],
+    # HydroATLAS degree of regulation at the pour point (dor_pc_pva, stored as percent x 10): the storage
+    # of all dams on or upstream of the reach over the annual discharge of that reach. Its own volume is
+    # rebuilt with HydroATLAS's discharge, the dam's capacity (included in it) is deducted, and the result
+    # is divided by this tool's inflow. Floored at 0; a dam without capacity deducts nothing.
+    dor_volume = df["dor_pc_pva"] / 1000 * df["dis_m3_pyr"] * M3S_TO_HM3_YR
+    df["Degree_Regulation_HA"] = (dor_volume - cap.fillna(0)).clip(lower=0) / inflow
+    # DoR_Cat uses the larger of our value (identified upstream dams) and the HydroATLAS one
+    regulation = np.fmax(df["Degree_Regulation"], df["Degree_Regulation_HA"])
+    df["DoR_Cat"] = pd.cut(regulation, bins=[-np.inf, 0.2, 0.5, np.inf],
                            labels=[1, 2, 3], right=False).astype("Int64")
-    # right=False puts exactly 0.5 in cat 3; the note says "between 0.2 and 0.5" is 2
-    df.loc[df["Degree_Regulation"] == 0.5, "DoR_Cat"] = 2
+    # right=False puts exactly 0.5 in cat 3; "between 0.2 and 0.5" is 2
+    df.loc[regulation == 0.5, "DoR_Cat"] = 2
     # Category 4: at least one upstream dam has no storage information, so the storage above
     # (and the degree of regulation) is only a lower bound and cannot be classified.
     unknown_storage = [any(not (cap_of.get(d, np.nan) > 0) for d in s.split(", ") if d) for s in ups]
     df.loc[unknown_storage, "DoR_Cat"] = 4
+    # QC_flag_DOR: our value and the HydroATLAS one disagree by 20 % of the larger one or more, and by at
+    # least 0.05 (so that tiny values do not trigger it); N/A when one of them is missing
+    a, b = df["Degree_Regulation"], df["Degree_Regulation_HA"]
+    diff, top = (a - b).abs(), np.fmax(a, b)
+    inconsistent = (diff / top.where(top > 0) >= DOR_FLAG_RELATIVE) & (diff >= DOR_FLAG_ABSOLUTE)
+    df["QC_flag_DOR"] = np.where(a.isna() | b.isna(), "N/A", np.where(inconsistent, "no_ok", "ok"))
 
     # ero_kh_uav [kg/ha/yr] x 100 [ha/km2] x UP_AREA [km2] / density [kg/m3] -> m3/yr -> hm3/yr
     df["Erosion_hm3"] = df["ero_kh_uav"] * 100 * area / density_kg_m3 / 1e6

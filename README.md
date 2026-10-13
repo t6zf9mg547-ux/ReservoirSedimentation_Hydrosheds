@@ -27,7 +27,7 @@ are constants at the top of `Module/HydroshedsDelineation.py`.
    sub-basins (`NEXT_DOWN`) → watershed, river network, downstream river
    (dam snapped to the nearest HydroRIVERS reach within 2 km, then followed to
    the outlet), upstream portfolio dams.
-2. **Calculations** — the 23 derived columns (inflow, C/I, degree of
+2. **Calculations** — the 25 derived columns (inflow, C/I, degree of
    regulation, erosion, SDR, trapping efficiency, sediment volume, C/S, QC
    flags…) plus the 296 HydroATLAS attributes of the dam's sub-basin.
 3. **Plots** — the screening diagram of the chosen scenario.
@@ -36,7 +36,7 @@ are constants at the top of `Module/HydroshedsDelineation.py`.
 
 | File | Content |
 |---|---|
-| `Output/<portfolio>_Hydrosheds_Scen<#>_SDR_<..>_TE_<..>.csv` | input + 23 calculated columns (incl. the 4 landslide hazard shares) + 296 HydroATLAS columns (326 in total) |
+| `Output/<portfolio>_Hydrosheds_Scen<#>_SDR_<..>_TE_<..>.csv` | input + 25 calculated columns (incl. 2 degree-of-regulation and 4 landslide hazard columns) + 296 HydroATLAS columns (328 in total) |
 | `Output/<same name>_diagnostics.csv` | per dam: sub-basin, snap distance, downstream status, same-sub-basin dams whose order is unknown, and the scenario parameters |
 | `Output/<portfolio>_Watershed/<Dam_ID>.gpkg` | layers `Dams`, `Watershed`, `Sub_basins`, `River_Networks`, `River_Downstream`, `Landslide_hazard` |
 | `Output/<portfolio>_Watershed/All_Dams.gpkg` | the same 6 layers merged, one feature per dam / sub-basin / river reach (hazard: per dam and class) |
@@ -86,8 +86,17 @@ Low/Low and High/High reproduce the earlier lower-loss and higher-loss results e
   unknown and neither is counted as upstream of the other (listed in the
   diagnostics file).
 - Upstream dams with no `Reservoir_hm3` add nothing to `Storage_Upstream_hm3`, so the degree of
-  regulation is only a lower bound: such a dam gets `DoR_Cat = 4` (magenta, "Upstream storage unknown")
+  regulation of the identified dams is only a lower bound: such a dam gets `DoR_Cat = 4` (magenta, "Upstream storage unknown")
   instead of 1–3. A dam with no upstream dams has `Degree_Regulation = 0` and `DoR_Cat = 1`.
+- **Degree of regulation.** `Degree_Regulation` is the storage of the identified upstream dams over the inflow.
+  `Degree_Regulation_HA` is the HydroATLAS value (`dor_pc_pva`: storage of all dams on or upstream of the reach over
+  its annual discharge, stored as percent × 10, hence the division by 1000), turned back into a volume with
+  HydroATLAS's own discharge, minus the dam's own capacity (which it includes; a dam without capacity deducts
+  nothing), floored at 0 and divided by this tool's inflow, which is the same discharge, so it is `(dor_pc_pva/1000 × Inflow_hm3 − Reservoir_hm3) / Inflow_hm3`.
+  `DoR_Cat` is taken from the larger of the two values (thresholds 0.2 and 0.5). `QC_flag_DOR` is `no_ok` when they
+  differ by 20 % of the larger or more *and* by at least 0.05, `N/A` when one is missing. `dor_pc_pva` is capped at 10000 in HydroATLAS (1000 %), so for a dam at the cap `Degree_Regulation_HA` is a lower bound; the category (3) is not affected.
+  Dams that HydroATLAS knows
+  but the portfolio does not list (or the reverse) show up as flagged.
 - The upper Gill/Brune trapping-efficiency fit exceeds 1 for large C/I; it is capped at 1.
 - QC flags use the text values `ok`, `no_ok` and `N/A`. `QC_flag_CS` is 0 when C/S ≥ 300 years, else 1.
 - `River_Networks` keeps the reaches whose representative point lies inside the watershed.

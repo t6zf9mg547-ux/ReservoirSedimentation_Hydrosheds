@@ -6,6 +6,17 @@ conventions and [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-13
+### Added
+- `Degree_Regulation_HA`: the HydroATLAS degree of regulation (`dor_pc_pva`, stored ×10, so divided by 1000), rebuilt as a
+  storage, minus the dam's own capacity, floored at 0, over the inflow. Column placed after `Degree_Regulation`.
+- `QC_flag_DOR` after `DoR_Cat`: `no_ok` when `Degree_Regulation` and `Degree_Regulation_HA` differ by 20 % of the larger
+  one or more and by at least 0.05; `N/A` when one is missing. The output has 328 columns.
+### Changed
+- **Results change.** `DoR_Cat` is taken from the larger of `Degree_Regulation` and `Degree_Regulation_HA`; category 4 (an upstream dam without
+  storage data) still overrides.
+- `dor_pc_pva` is capped at 10000 in HydroATLAS (1000 %); for a dam at the cap `Degree_Regulation_HA` is a lower bound.
+
 ## [0.2.0] - 2026-10-12
 ### Added
 - `Landslide_hazard` layer in every dam GeoPackage (`Module/LandslideHazard.py`): the global landslide hazard map

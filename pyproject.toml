@@ -7,7 +7,7 @@
 
 [project]
 name = "reservoir-sedimentation-hydrosheds"
-version = "0.2.0"
+version = "0.3.0"
 description = "Reservoir sedimentation risk screening for dam portfolios using HydroSHEDS (HydroBASINS/HydroATLAS/HydroRIVERS)"
 requires-python = ">=3.13"
 dependencies = [
