@@ -40,6 +40,22 @@ COLUMNS = {1: "Landslide_VeryLow_pct", 2: "Landslide_Low_pct", 3: "Landslide_Med
 EQUAL_AREA_CRS = "EPSG:6933"      # World Cylindrical Equal Area, for areas only
 
 
+def open_map():
+    """Open the hazard raster. The map is kept in iCloud Drive, which macOS only lets an app read once it
+    has been given access; without it the open fails with 'Operation not permitted'."""
+    try:
+        return rasterio.open(HAZARD_TIF)
+    except rasterio.errors.RasterioIOError as error:
+        if "not permitted" in str(error).lower():
+            raise SystemExit(
+                f"macOS does not let this program read the landslide hazard map:\n  {HAZARD_TIF}\n"
+                "It is stored in iCloud Drive. Allow the app you run Python from (Terminal, iTerm, VS Code, PyCharm, ...)\n"
+                "to use it: System Settings > Privacy & Security > Files and Folders > that app > iCloud Drive\n"
+                "(or add the app under Full Disk Access), restart the app and run again. Alternatively copy the\n"
+                "file to a normal folder and change HAZARD_TIF in Module/LandslideHazard.py.") from None
+        raise
+
+
 def has_layer(gpkg_path):
     p = Path(gpkg_path)
     return p.exists() and LAYER in pyogrio.list_layers(p)[:, 0]
@@ -58,7 +74,7 @@ def hazard_polygons(watershed, dam_id):
     empty one when the watershed is outside the map."""
     if not watershed.is_valid:
         watershed = shapely.make_valid(watershed)
-    with rasterio.open(HAZARD_TIF) as src:
+    with open_map() as src:
         win = from_bounds(*watershed.bounds, transform=src.transform).round_offsets().round_lengths()
         data = src.read(1, window=win, boundless=True, fill_value=NO_DATA)
         transform = src.window_transform(win)
@@ -99,6 +115,8 @@ def ensure_layers(folder, dam_ids, force=False):
     Returns the number of GeoPackages processed."""
     todo = [d for d in dam_ids if (Path(folder) / f"{d}.gpkg").exists()
             and (force or not has_layer(Path(folder) / f"{d}.gpkg"))]
+    if todo:
+        open_map().close()                  # fail at once, with an explanation, if the map cannot be read
     for i, dam_id in enumerate(todo, 1):
         layer = add_layer(Path(folder) / f"{dam_id}.gpkg")
         shares = ", ".join(f"{r.Hazard_Class} {r.Share_pct:.0f}%" for r in layer.itertuples()) or "outside the map"

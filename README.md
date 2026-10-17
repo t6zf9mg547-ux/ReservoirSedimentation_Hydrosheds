@@ -135,6 +135,10 @@ uv sync
 ```
 GDAL must be installed at system level (`brew install gdal`); `tkinter` is stdlib.
 See `RUN_COMMANDS.md` for the command reference.
+Some data are in iCloud Drive (here the landslide hazard map). macOS lets a program read them only if the app it runs
+from (Terminal, iTerm, VS Code, PyCharm, ...) has access: System Settings > Privacy & Security > Files and Folders >
+that app > iCloud Drive (or Full Disk Access), then restart the app. Without it the run stops with an explanatory
+message (`Operation not permitted`).
 
 ## Memory
 

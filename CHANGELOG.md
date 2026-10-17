@@ -6,6 +6,11 @@ conventions and [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-10-17
+### Changed
+- When macOS refuses access to the landslide hazard map in iCloud Drive (`Operation not permitted`), the run stops at once
+  with a message explaining how to allow the app (README, Setup).
+
 ## [0.3.0] - 2026-10-13
 ### Added
 - `Degree_Regulation_HA`: the HydroATLAS degree of regulation (`dor_pc_pva`, stored ×10, so divided by 1000), rebuilt as a
